@@ -1,11 +1,22 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import json
 import pickle
 import base64
 
+__all__ = ['Task']
+
 
 class Task(object):
+    """
+    :class: `Task` can retrieve it state from worker and by managed from client.
+    Never create a task from nothing, a task is mostly create by :class:`carotte.Client`.
+
+    :param int id: Task ID
+    :param string name: Task name
+    :param array args: (optional) Task arguments
+    :param dict kwargs: (optional) Task keyword arguments
+    :param client: :class:`carotte.Client` object
+    """
     def __init__(self, id, name, args=[], kwargs={}, client=None):
         self.id = id
         self.name = name
@@ -19,7 +30,13 @@ class Task(object):
 
         self.client = client
 
-    def serialize(self):
+    def _serialize(self):
+        """
+        Prepare :class:`carotte.Task` to be send to server.
+
+        :returns: Return a string which contain jsonified :class:`carotte.Task`
+        :rtype: string
+        """
         data = {
             'id': self.id,
             'name': self.name,
@@ -31,7 +48,14 @@ class Task(object):
             'exception': self.__exception}
         return json.dumps(data)
 
-    def deserialize(self, data):
+    def _deserialize(self, data):
+        """
+        Feed :class:`carotte.Task` with raw data.
+
+        :param string data: Data which will be deserialize to feed :class:`carotte.Task`.
+
+        :rtype: None
+        """
         data = json.loads(data)
         self.id = data.get('id')
         self.name = data.get('name')

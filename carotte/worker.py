@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
 import zmq
@@ -9,10 +8,25 @@ import base64
 import pickle
 import threading
 
-from .task import Task
+from . import Task
+from . import logger
+
+__all__ = ['Worker']
 
 
 class Worker(object):
+    """
+    :class:`carotte.Worker` register and wait task to run.
+
+    :param string bind: Address to bind
+    :param int thread: Number of thread
+
+    >>> from carotte import Worker
+    >>> worker = Worker(thread=10)
+    >>> worker.add_task('hello', lambda: 'hello world')
+    >>> worker.run()
+
+    """
     def __init__(self, bind="tcp://127.0.0.1:5550", thread=1):
         self.thread = thread
         self.bind = bind
@@ -25,16 +39,16 @@ class Worker(object):
 
         self.queue = queue.Queue()
         for i in range(self.thread):
-            t = threading.Thread(target=self.worker)
+            t = threading.Thread(target=self._worker)
             t.daemon = True
             t.start()
 
     def run(self):
-        print('[server] Registered tasks:')
-        for task in self.tasks.keys():
-            print('[server]   - %s' % task)
-
-        print("[server] Listening on %s ..." % self.bind)
+        """
+        Blocking method that run the server.
+        """
+        logger.info('Registered tasks: %s' % ', '.join(self.tasks))
+        logger.info('Listening on %s ...' % self.bind)
         self.socket.bind(self.bind)
 
         while True:
@@ -51,13 +65,13 @@ class Worker(object):
 
                 self.task_results[task.id] = task
                 self.queue.put(task.id)
-                response = task.serialize()
+                response = task._serialize()
                 self.socket.send_json(response)
             elif action == 'get_result':
                 task_id = msg.get('id')
                 task = self.task_results.get(task_id)
                 if task:
-                    response = task.serialize()
+                    response = task._serialize()
                 else:
                     response = {'id': task_id, 'error': 'task not found'}
                 self.socket.send_json(response)
@@ -68,7 +82,7 @@ class Worker(object):
                     while not task.terminated:
                         task = self.task_results[task_id]
                         time.sleep(1)
-                    response = task.serialize()
+                    response = task._serialize()
                 else:
                     response = {'id': task_id, 'error': 'task not found'}
                 self.socket.send_json(response)
@@ -77,12 +91,23 @@ class Worker(object):
                 self.socket.send_json(response)
 
     def add_task(self, task_name, task):
+        """
+        Register a task to server.
+
+        :param string task_name: Task name used by clients
+        :param method task: Method that will be called
+        """
         self.tasks[task_name] = task
 
-    def del_task(self, task_name):
+    def delete_task(self, task_name):
+        """
+        Unregister a task from server.
+
+        :param string task_name: Task name
+        """
         del(self.tasks[task_name])
 
-    def worker(self):
+    def _worker(self):
         while True:
             task_id = self.queue.get()
             task_name = self.task_results[task_id].name
@@ -90,7 +115,7 @@ class Worker(object):
             task_kwargs = self.task_results[task_id].kwargs
 
             with self.lock:
-                print('[server] Running %s (args:%s) (kwargs:%s)' % (
+                logger.info('Running %s (args:%s) (kwargs:%s)' % (
                     task_name, task_args, task_kwargs))
             task = self.tasks.get(task_name)
 
@@ -102,12 +127,16 @@ class Worker(object):
                 self.task_results[task_id].set_exception("%s" % err)
 
             self.task_results[task_id].set_terminated(True)
-            print('[server] Finished task %s (success: %s)' % (
+            logger.info('Finished task %s (success: %s)' % (
                 task_id, self.task_results[task_id].success))
             self.queue.task_done()
 
     def stop(self):
-        print('[server] Waiting tasks to finish...')
+        """
+        Stop server and all its threads.
+        """
+        logger.info('Waiting tasks to finish...')
         self.queue.join()
-        print('[server] Exiting...')
+        self.socket.close()
+        logger.info('Exiting...')
         sys.exit(0)

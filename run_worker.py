@@ -5,7 +5,7 @@ try:
 except ImportError:
     from urllib.request import urlopen
 
-from carotte.worker import Worker
+from carotte import Worker
 
 
 def get_website(url):
