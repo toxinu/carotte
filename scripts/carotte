@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from docopt import docopt
+from carotte import __version__
+from carotte import Worker
+
+__doc__ = """Carotte.
+
+Usage:
+    carotte worker [--thread=<int>] [--bind=<address>] [--tasks-module=<module>]
+
+Options:
+    --thread=<int>              Number of threads to run [default: 1]
+    --bind=<address>            Address to bind worker on [default: tcp://127.0.0.1:5000]
+    --tasks-module=<module>     Module to load tasks from
+"""
+
+if __name__ == '__main__':
+    args = docopt(__doc__, version=__version__)
+    if args.get('worker'):
+        worker = Worker(bind=args.get('--bind'), thread=args.get('--thread'))
+        if args.get('--tasks-module'):
+            __import__(args.get('--tasks-module'))
+            from carotte import task as registry
+            for name, task in registry.all.items():
+                worker.add_task(name, task)
+        worker.run()

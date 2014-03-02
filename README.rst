@@ -1,45 +1,37 @@
 Carotte
 =======
 
-Carotte is a very lightweight Celery.
+Carotte is a very lightweight Celery on zmq.
 
 Install
 -------
 
 ::
 
-    git clone https://github.com/socketubs/carotte.git
-    cd carotte
-    virtualenv virtenv
-    source virtenv/bin/activate
-    pip install -r requirements.txt
+    pip install carotte
 
 
 Getting started
 ---------------
 
-::
+Create your ``tasks.py``: ::
 
-    python run_worker.py
-    python run_client.py
+    from carotte import task
 
+    @task
+    def hello_world(name):
+        return 'Hello %s!'' % name
 
-More
-----
+Run your worker: ::
 
-::
+    carotte --tasks-module tasks.py
 
-    >>> from carotte import Worker
-    >>> worker = Worker()
-    >>> worker.add_task('hello', lambda: 'hello world')
-    >>> c.run()
-
-::
+Run your client: ::
 
     >>> from carotte import Client
     >>> client = Client()
-    >>> task = client.run_task('hello')
+    >>> task = client.run_task('hello_world', ['foo'])
     >>> task.success
     >>> True
     >>> task.result
-    >>> 'hello world'
+    >>> 'Hello foo!'

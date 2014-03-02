@@ -8,3 +8,4 @@ logger = logging.getLogger(__name__)
 from .task import Task
 from .client import Client
 from .worker import Worker
+from .decorator import task

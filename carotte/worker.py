@@ -36,7 +36,8 @@ class Worker(object):
         self.lock = threading.Lock()
 
         self.queue = queue.Queue()
-        for i in range(self.thread):
+        logger.info('Running %s thread(s)...' % self.thread)
+        for i in range(int(self.thread)):
             t = threading.Thread(target=self._worker)
             t.daemon = True
             t.start()
@@ -45,7 +46,10 @@ class Worker(object):
         """
         Blocking method that run the server.
         """
-        logger.info('Registered tasks: %s' % ', '.join(self.tasks))
+        if self.tasks:
+            logger.info('Registered tasks: %s' % ', '.join(self.tasks))
+        else:
+            logger.info('No tasks registered')
         logger.info('Listening on %s ...' % self.bind)
         self.socket.bind(self.bind)
 
