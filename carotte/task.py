@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
-import pickle
-import base64
-
-__all__ = ['Task']
 
 
 class Task(object):
@@ -29,47 +24,6 @@ class Task(object):
         self.__exception = None
 
         self.client = client
-
-    def _serialize(self):
-        """
-        Prepare :class:`carotte.Task` to be send to server.
-
-        :returns: Return a string which contain jsonified :class:`carotte.Task`
-        :rtype: string
-        """
-        data = {
-            'id': self.id,
-            'name': self.name,
-            'args': base64.b64encode(pickle.dumps(self.args)).decode('utf-8'),
-            'kwargs': base64.b64encode(pickle.dumps(self.kwargs)).decode('utf-8'),
-            'result': self.__result,
-            'terminated': self.__terminated,
-            'success': self.__success,
-            'exception': self.__exception}
-        return json.dumps(data)
-
-    def _deserialize(self, data):
-        """
-        Feed :class:`carotte.Task` with raw data.
-
-        :param string data: Data which will be deserialize to feed :class:`carotte.Task`.
-
-        :rtype: None
-        """
-        data = json.loads(data)
-        self.id = data.get('id')
-        self.name = data.get('name')
-        self.set_terminated(data.get('terminated'))
-        self.set_result(data.get('result'))
-        self.set_success(data.get('success'))
-        self.set_exception(data.get('exception'))
-
-        self.args = []
-        if data.get('args'):
-            self.args = pickle.loads(base64.b64decode(data.get('args')))
-        self.kwargs = {}
-        if data.get('kwargs'):
-            self.kwargs = pickle.loads(base64.b64decode(data.get('kwargs')))
 
     @property
     def result(self):
@@ -115,13 +69,13 @@ class Task(object):
         if self.client is None:
             return
         task = self.client.get_task_result(self.id)
-        self.__result = task.get('result')
-        self.__success = task.get('success')
-        self.__exception = task.get('exception')
-        self.__terminated = task.get('terminated')
+        self.__result = task.result
+        self.__success = task.success
+        self.__exception = task.exception
+        self.__terminated = task.terminated
 
     def wait(self):
         if self.__terminated:
             return self.success
         m = self.client.wait(self.id)
-        return m.get('success')
+        return m.success

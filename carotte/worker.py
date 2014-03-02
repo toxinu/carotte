@@ -4,8 +4,6 @@ import zmq
 import uuid
 import time
 import queue
-import base64
-import pickle
 import threading
 
 from . import Task
@@ -52,29 +50,28 @@ class Worker(object):
         self.socket.bind(self.bind)
 
         while True:
-            msg = self.socket.recv_json()
+            msg = self.socket.recv_pyobj()
 
             action = msg.get('action')
             if action == 'run_task':
                 task = Task(str(uuid.uuid4()), msg.get('name'), [], {})
 
                 if msg.get('args'):
-                    task.args = pickle.loads(base64.b64decode(msg.get('args')))
+                    task.args = msg.get('args', [])
                 if msg.get('kwargs'):
-                    task.kwargs = pickle.loads(base64.b64decode(msg.get('kwargs')))
+                    task.kwargs = msg.get('kwargs', {})
 
                 self.task_results[task.id] = task
                 self.queue.put(task.id)
-                response = task._serialize()
-                self.socket.send_json(response)
+                self.socket.send_pyobj(task)
             elif action == 'get_result':
                 task_id = msg.get('id')
                 task = self.task_results.get(task_id)
                 if task:
-                    response = task._serialize()
+                    response = task
                 else:
                     response = {'id': task_id, 'error': 'task not found'}
-                self.socket.send_json(response)
+                self.socket.send_pyobj(response)
             elif action == 'wait':
                 task_id = msg.get('id')
                 task = self.task_results[task_id]
@@ -82,13 +79,13 @@ class Worker(object):
                     while not task.terminated:
                         task = self.task_results[task_id]
                         time.sleep(1)
-                    response = task._serialize()
+                    response = task
                 else:
                     response = {'id': task_id, 'error': 'task not found'}
-                self.socket.send_json(response)
+                self.socket.send_pyobj(response)
             else:
                 response = {'success': False, 'error': 'Message malformed'}
-                self.socket.send_json(response)
+                self.socket.send_pyobj(response)
 
     def add_task(self, task_name, task):
         """

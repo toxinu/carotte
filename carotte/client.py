@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 import zmq
-import json
-import base64
-import pickle
 
-from . import Task
 from . import logger
 
 __all__ = ['Client']
@@ -41,7 +37,8 @@ class Client(object):
 
         :param string task_name: Name of task to execute
         :param list task_args: (optional) List of arguments to give to task
-        :param dict task_kwargs: (optional) Dict of keyword arguments to give to task
+        :param dict task_kwargs: (optional) Dict of keyword arguments
+                                 to give to task
 
         :returns: :class:`carotte.Task` object
 
@@ -49,24 +46,11 @@ class Client(object):
         data = {
             'action': 'run_task',
             'name': task_name,
-            'args': base64.b64encode(pickle.dumps(task_args)).decode('utf-8'),
-            'kwargs': base64.b64encode(pickle.dumps(task_kwargs)).decode('utf-8')}
-        self.socket.send_json(data)
-        msg = self.socket.recv_json()
-        task = self._deserialize_task(msg)
-        return task
-
-    def _deserialize_task(self, raw_data):
-        """
-        Deserialize and create a :class:`carotte.Task` object from raw data.
-
-        :param string raw_data: Raw data which contain a task in json
-
-        :returns: :class:`carotte.Task` object
-        """
-        data = json.loads(raw_data)
-        task = Task(data.get('id'), data.get('name'), client=self)
-        task._deserialize(raw_data)
+            'args': task_args,
+            'kwargs': task_kwargs}
+        self.socket.send_pyobj(data)
+        task = self.socket.recv_pyobj()
+        task.client = self
         return task
 
     def get_task_result(self, task_id):
@@ -83,9 +67,9 @@ class Client(object):
             'action': 'get_result',
             'id': task_id
         }
-        self.socket.send_json(data)
-        msg = self.socket.recv_json()
-        return json.loads(msg)
+        self.socket.send_pyobj(data)
+        task = self.socket.recv_pyobj()
+        return task
 
     def wait(self, task_id):
         """
@@ -101,6 +85,6 @@ class Client(object):
             'action': 'wait',
             'id': task_id
         }
-        self.socket.send_json(data)
-        msg = self.socket.recv_json()
-        return json.loads(msg)
+        self.socket.send_pyobj(data)
+        task = self.socket.recv_pyobj()
+        return task
