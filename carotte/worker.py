@@ -3,8 +3,12 @@ import sys
 import zmq
 import uuid
 import time
-import queue
 import threading
+
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 from . import Task
 from . import logger
