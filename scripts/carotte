@@ -11,7 +11,7 @@ Usage:
 
 Options:
     --thread=<int>              Number of threads to run [default: 1]
-    --bind=<address>            Address to bind worker on [default: tcp://127.0.0.1:5000]
+    --bind=<address>            Address to bind worker on [default: tcp://127.0.0.1:5550]
     --tasks-module=<module>     Module to load tasks from
 """
 
@@ -21,7 +21,7 @@ if __name__ == '__main__':
         worker = Worker(bind=args.get('--bind'), thread=args.get('--thread'))
         if args.get('--tasks-module'):
             __import__(args.get('--tasks-module'))
-            from carotte import task as registry
-            for name, task in registry.all.items():
+            from carotte import registrar
+            for name, task in registrar.items():
                 worker.add_task(name, task)
         worker.run()
