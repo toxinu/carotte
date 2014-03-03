@@ -20,7 +20,7 @@ Create your ``tasks.py``: ::
 
     @task
     def hello_world(name):
-        return 'Hello %s!'' % name
+        return 'Hello %s!' % name
 
 Run your worker: ::
 
