@@ -129,6 +129,7 @@ class Worker(object):
                     *task_args, **task_kwargs))
                 self.task_results[task_id].set_success(True)
             except Exception as err:
+                self.task_results[task_id].set_success(False)
                 self.task_results[task_id].set_exception("%s" % err)
 
             self.task_results[task_id].set_terminated(True)
