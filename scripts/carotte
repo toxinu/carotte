@@ -10,7 +10,7 @@ Usage:
     carotte worker [--thread=<int>] [--bind=<address>] [--tasks-module=<module>]
 
 Options:
-    --thread=<int>              Number of threads to run [default: 1]
+    --thread=<int>              Number of threads to run [default: 5]
     --bind=<address>            Address to bind worker on [default: tcp://127.0.0.1:5550]
     --tasks-module=<module>     Module to load tasks from
 """
@@ -24,4 +24,7 @@ if __name__ == '__main__':
             from carotte import registrar
             for name, task in registrar.items():
                 worker.add_task(name, task)
-        worker.run()
+        try:
+            worker.run()
+        except KeyboardInterrupt:
+            worker.stop()
