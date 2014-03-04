@@ -29,7 +29,7 @@ class Worker(object):
     >>> worker.run()
 
     """
-    def __init__(self, bind="tcp://127.0.0.1:5550", thread=1):
+    def __init__(self, bind="tcp://127.0.0.1:5550", thread=5):
         self.thread = thread
         self.bind = bind
         self.context = zmq.Context()
