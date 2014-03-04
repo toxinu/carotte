@@ -56,7 +56,11 @@ class Client(object):
 
     def __recv_pyobj(self):
         if self.poller.poll(self.timeout * 1000):
-            return self.socket.recv_pyobj()
+            r = self.socket.recv_pyobj()
+            if not r.get('success', False):
+                exception = r.get('exception', Exception('Unhandler exception'))
+                raise exception
+            return r
         else:
             raise IOError('Socket timeout (%s)' % self.workers)
 

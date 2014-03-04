@@ -13,6 +13,9 @@ except ImportError:
 from . import Task
 from . import logger
 
+from .exceptions import TaskNotFound
+from .exceptions import MessageMalformed
+
 __all__ = ['Worker']
 
 
@@ -62,23 +65,31 @@ class Worker(object):
 
             action = msg.get('action')
             if action == 'run_task':
-                task = Task(str(uuid.uuid4()), msg.get('name'), [], {})
+                if msg.get('name') not in self.tasks:
+                    response = {
+                        'success': False, 'exception': TaskNotFound(msg.get('name'))}
+                    self.socket.send_pyobj(response)
+                else:
+                    task = Task(str(uuid.uuid4()), msg.get('name'), [], {})
 
-                if msg.get('args'):
-                    task.args = msg.get('args', [])
-                if msg.get('kwargs'):
-                    task.kwargs = msg.get('kwargs', {})
+                    if msg.get('args'):
+                        task.args = msg.get('args', [])
+                    if msg.get('kwargs'):
+                        task.kwargs = msg.get('kwargs', {})
 
-                self.task_results[task.id] = task
-                self.queue.put(task.id)
-                self.socket.send_pyobj(task)
+                    self.task_results[task.id] = task
+                    self.queue.put(task.id)
+                    self.socket.send_pyobj({'success': True, 'task': task})
             elif action == 'get_result':
                 task_id = msg.get('id')
                 task = self.task_results.get(task_id)
                 if task:
-                    response = task
+                    response = {'success': True, 'task': task}
                 else:
-                    response = {'id': task_id, 'error': 'task not found'}
+                    response = {
+                        'success': False,
+                        'id': task_id,
+                        'exception': TaskNotFound(task_id)}
                 self.socket.send_pyobj(response)
             elif action == 'wait':
                 task_id = msg.get('id')
@@ -87,12 +98,15 @@ class Worker(object):
                     while not task.terminated:
                         task = self.task_results[task_id]
                         time.sleep(1)
-                    response = task
+                    response = {'success': True, 'task': task}
                 else:
-                    response = {'id': task_id, 'error': 'task not found'}
+                    response = {
+                        'success': False,
+                        'id': task_id,
+                        'exception': TaskNotFound(task_id)}
                 self.socket.send_pyobj(response)
             else:
-                response = {'success': False, 'error': 'Message malformed'}
+                response = {'success': False, 'exception': MessageMalformed()}
                 self.socket.send_pyobj(response)
 
     def add_task(self, task_name, task):
@@ -122,7 +136,8 @@ class Worker(object):
             with self.lock:
                 logger.info('Running %s (args:%s) (kwargs:%s)' % (
                     task_name, task_args, task_kwargs))
-            task = self.tasks.get(task_name)
+
+            task = self.tasks.get(task_name, None)
 
             try:
                 self.task_results[task_id].set_result(task(
