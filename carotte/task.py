@@ -19,6 +19,7 @@ class Task(object):
         self.kwargs = kwargs
 
         self.__terminated = False
+        self.__terminated_at = None
         self.__result = None
         self.__success = None
         self.__exception = None
@@ -53,6 +54,13 @@ class Task(object):
         self.__update_task()
         return self.__terminated
 
+    @property
+    def terminated_at(self):
+        if self.__terminated:
+            return self.__terminated_at
+        self.__update_task()
+        return self.__terminated_at
+
     def set_result(self, result):
         self.__result = result
 
@@ -65,17 +73,23 @@ class Task(object):
     def set_terminated(self, terminated):
         self.__terminated = terminated
 
-    def __update_task(self):
+    def set_terminated_at(self, terminated_at):
+        self.__terminated_at = terminated_at
+
+    def __update_task(self, task=None):
         if self.client is None:
             return
-        task = self.client.get_task_result(self.id)
+        if task is None:
+            task = self.client.get_task_result(self.id)
         self.__result = task.result
         self.__success = task.success
         self.__exception = task.exception
         self.__terminated = task.terminated
+        self.__terminated_at = task.terminated_at
 
     def wait(self):
         if self.__terminated:
             return self.success
-        m = self.client.wait(self.id)
-        return m.success
+        task = self.client.wait(self.id)
+        self.__update_task(task=task)
+        return self.success
