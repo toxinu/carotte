@@ -4,6 +4,9 @@ import zmq
 import uuid
 import time
 import threading
+from time import sleep
+from datetime import datetime
+from datetime import timedelta
 
 try:
     import queue
@@ -12,6 +15,8 @@ except ImportError:
 
 from . import Task
 from . import logger
+
+from .results.backends import Dummy
 
 from .exceptions import TaskNotFound
 from .exceptions import MessageMalformed
@@ -25,6 +30,8 @@ class Worker(object):
 
     :param string bind: Address to bind
     :param int thread: Number of thread
+    :param task_result_backend: :class:`carotte.results.backends.Base`
+    :param task_result_expires: :class:`datetime.timedelta`
 
     >>> from carotte import Worker
     >>> worker = Worker(thread=10)
@@ -32,22 +39,52 @@ class Worker(object):
     >>> worker.run()
 
     """
-    def __init__(self, bind="tcp://127.0.0.1:5550", thread=5):
+    def __init__(
+            self, bind="tcp://127.0.0.1:5550", thread=5,
+            task_result_backend=None, task_result_expires=None):
         self.thread = thread
         self.bind = bind
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
+        self.running = False
         self.tasks = {}
-        self.task_results = {}
+
+        if task_result_backend is None:
+            task_result_backend = Dummy()
+        self.task_result_backend = task_result_backend
+
+        from .results.backends import Redis
+        self.task_result_backend = Redis()
+
+        if task_result_expires is None:
+            task_result_expires = timedelta(seconds=5)
+        assert isinstance(task_result_expires, timedelta)
+        self.task_result_expires = task_result_expires
 
         self.lock = threading.Lock()
 
         self.queue = queue.Queue()
         logger.info('Running %s thread(s)...' % self.thread)
-        for i in range(int(self.thread)):
+        for i in range(int(self.thread) + 1):
             t = threading.Thread(target=self._worker)
             t.daemon = True
             t.start()
+
+    def cleanup_task_results(self):
+        time_wait = 0
+        time_step = 2
+        while self.running:
+            if time_wait >= self.task_result_expires.total_seconds():
+                stats = self.task_result_backend.cleanup(self.task_result_expires)
+                logger.info('Cleanup_results stats: %s' % stats)
+                time_wait = 0
+            sleep(time_step)
+            time_wait += time_step
+
+    def post_run(self):
+        # Add cleanup results task
+        t = threading.Thread(target=self.cleanup_task_results)
+        t.start()
 
     def run(self):
         """
@@ -59,6 +96,9 @@ class Worker(object):
             logger.info('No tasks registered')
         logger.info('Listening on %s ...' % self.bind)
         self.socket.bind(self.bind)
+
+        self.running = True
+        self.post_run()
 
         while True:
             msg = self.socket.recv_pyobj()
@@ -77,12 +117,12 @@ class Worker(object):
                     if msg.get('kwargs'):
                         task.kwargs = msg.get('kwargs', {})
 
-                    self.task_results[task.id] = task
+                    self.task_result_backend.add_task(task)
                     self.queue.put(task.id)
                     self.socket.send_pyobj({'success': True, 'task': task})
             elif action == 'get_result':
                 task_id = msg.get('id')
-                task = self.task_results.get(task_id)
+                task = self.task_result_backend.get_task(task_id)
                 if task:
                     response = {'success': True, 'task': task}
                 else:
@@ -93,10 +133,10 @@ class Worker(object):
                 self.socket.send_pyobj(response)
             elif action == 'wait':
                 task_id = msg.get('id')
-                task = self.task_results[task_id]
+                task = self.task_result_backend.get_task(task_id)
                 if task:
                     while not task.terminated:
-                        task = self.task_results[task_id]
+                        task = self.task_result_backend.get_task(task_id)
                         time.sleep(1)
                     response = {'success': True, 'task': task}
                 else:
@@ -129,33 +169,34 @@ class Worker(object):
     def _worker(self):
         while True:
             task_id = self.queue.get()
-            task_name = self.task_results[task_id].name
-            task_args = self.task_results[task_id].args
-            task_kwargs = self.task_results[task_id].kwargs
+            task = self.task_result_backend.get_task(task_id)
 
             with self.lock:
                 logger.info('Running %s (args:%s) (kwargs:%s)' % (
-                    task_name, task_args, task_kwargs))
+                    task.name, task.args, task.kwargs))
 
-            task = self.tasks.get(task_name, None)
+            task_func = self.tasks.get(task.name, None)
 
             try:
-                self.task_results[task_id].set_result(task(
-                    *task_args, **task_kwargs))
-                self.task_results[task_id].set_success(True)
+                task.set_result(task_func(*task.args, **task.kwargs))
+                task.set_success(True)
             except Exception as err:
-                self.task_results[task_id].set_success(False)
-                self.task_results[task_id].set_exception("%s" % err)
+                task.set_success(False)
+                task.set_exception("%s" % err)
 
-            self.task_results[task_id].set_terminated(True)
+            task.set_terminated(True)
+            task.set_terminated_at(datetime.now())
+            self.task_result_backend.update_task(task)
             logger.info('Finished task %s (success: %s)' % (
-                task_id, self.task_results[task_id].success))
+                task_id, task.success))
+            logger.info(task.exception)
             self.queue.task_done()
 
     def stop(self):
         """
         Stop server and all its threads.
         """
+        self.running = False
         logger.info('Waiting tasks to finish...')
         self.queue.join()
         self.socket.close()
