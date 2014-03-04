@@ -53,11 +53,8 @@ class Worker(object):
             task_result_backend = Dummy()
         self.task_result_backend = task_result_backend
 
-        from .results.backends import Redis
-        self.task_result_backend = Redis()
-
         if task_result_expires is None:
-            task_result_expires = timedelta(seconds=5)
+            task_result_expires = timedelta(days=1)
         assert isinstance(task_result_expires, timedelta)
         self.task_result_expires = task_result_expires
 
@@ -65,7 +62,7 @@ class Worker(object):
 
         self.queue = queue.Queue()
         logger.info('Running %s thread(s)...' % self.thread)
-        for i in range(int(self.thread) + 1):
+        for i in range(int(self.thread)):
             t = threading.Thread(target=self._worker)
             t.daemon = True
             t.start()
