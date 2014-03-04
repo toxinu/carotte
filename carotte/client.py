@@ -11,6 +11,8 @@ class Client(object):
     :class:`carotte.Client` can send task and manage it.
 
     :param list workers: List of worker addresses
+    :param int timeout: Socket timeout
+    :param boolean reconnect: Auto reconnect socket
 
     >>> from carotte import Client
     >>> client = Client()
@@ -23,13 +25,40 @@ class Client(object):
     >>> task.result
     >>> 'hello world'
     """
-    def __init__(self, workers=["tcp://localhost:5550"]):
+    def __init__(self, workers=["tcp://localhost:5550"], timeout=10, reconnect=True):
         self.workers = workers
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.setsockopt(zmq.LINGER, 0)
+
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN)
+        self.timeout = timeout
+        self.reconnect = reconnect
+
         for address in self.workers:
             logger.info('Connecting to %s ...' % address)
             self.socket.connect(address)
+
+    def __connect_socket(self):
+        for address in self.workers:
+            logger.info('Reconnecting to %s ...' % address)
+            self.socket.connect(address)
+
+    def __send_pyobj(self, data):
+        try:
+            self.socket.send_pyobj(data)
+        except zmq.error.ZMQError:
+            if self.reconnect:
+                self.__connect_socket()
+            else:
+                raise
+
+    def __recv_pyobj(self):
+        if self.poller.poll(self.timeout * 1000):
+            return self.socket.recv_pyobj()
+        else:
+            raise IOError('Socket timeout (%s)' % self.workers)
 
     def run_task(self, task_name, task_args=[], task_kwargs={}):
         """
@@ -48,8 +77,8 @@ class Client(object):
             'name': task_name,
             'args': task_args,
             'kwargs': task_kwargs}
-        self.socket.send_pyobj(data)
-        task = self.socket.recv_pyobj()
+        self.__send_pyobj(data)
+        task = self.__recv_pyobj()
         task.client = self
         return task
 
@@ -67,8 +96,8 @@ class Client(object):
             'action': 'get_result',
             'id': task_id
         }
-        self.socket.send_pyobj(data)
-        task = self.socket.recv_pyobj()
+        self.__send_pyobj(data)
+        task = self.__recv_pyobj()
         return task
 
     def wait(self, task_id):
@@ -85,6 +114,6 @@ class Client(object):
             'action': 'wait',
             'id': task_id
         }
-        self.socket.send_pyobj(data)
-        task = self.socket.recv_pyobj()
+        self.__send_pyobj(data)
+        task = self.__recv_pyobj()
         return task
