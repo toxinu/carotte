@@ -60,7 +60,7 @@ class Client(object):
             if not r.get('success', False):
                 exception = r.get('exception', Exception('Unhandler exception'))
                 raise exception
-            return r
+            return r.get('task')
         else:
             raise IOError('Socket timeout (%s)' % self.workers)
 
