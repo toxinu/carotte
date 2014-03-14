@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import redis
 import pickle
 from datetime import datetime
 
@@ -8,6 +7,7 @@ from . import Base
 
 class Redis(Base):
     def __init__(self, host='localhost', port=6379, db=0):
+        import redis
         self.r = redis.StrictRedis(host=host, port=port, db=db)
 
     def add_task(self, task):
