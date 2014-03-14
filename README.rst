@@ -22,7 +22,7 @@ Create your ``tasks.py``: ::
     def hello_world(name):
         return 'Hello %s!' % name
 
-Run your worker: ::
+Run your worker (default on "tcp://127.0.0.1:5550"): ::
 
     carotte --tasks-module tasks.py
 
