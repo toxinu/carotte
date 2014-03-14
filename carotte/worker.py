@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
-import sys
 import zmq
 import uuid
 import time
-import threading
+import signal
 from time import sleep
+from threading import Thread
 from datetime import datetime
 from datetime import timedelta
-
-try:
-    import queue
-except ImportError:
-    import Queue as queue
+from multiprocessing import Pool
 
 from . import Task
 from . import logger
@@ -22,6 +18,10 @@ from .exceptions import TaskNotFound
 from .exceptions import MessageMalformed
 
 __all__ = ['Worker']
+
+
+def unwrap_run_task(*args, **kwargs):
+    return Worker.run_task(*args, **kwargs)
 
 
 class Worker(object):
@@ -40,10 +40,10 @@ class Worker(object):
 
     """
     def __init__(
-            self, bind="tcp://127.0.0.1:5550", thread=5,
+            self, bind="tcp://127.0.0.1:5550", concurrency=5,
             task_result_backend=None, task_result_expires=None):
-        self.thread = thread
         self.bind = bind
+        self.concurrency = concurrency
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.running = False
@@ -58,18 +58,12 @@ class Worker(object):
         assert isinstance(task_result_expires, timedelta)
         self.task_result_expires = task_result_expires
 
-        self.lock = threading.Lock()
-
-        self.queue = queue.Queue()
-        logger.info('Running %s thread(s)...' % self.thread)
-        for i in range(int(self.thread)):
-            t = threading.Thread(target=self._worker)
-            t.daemon = True
-            t.start()
+        logger.info('Running %s concurrency...' % self.concurrency)
+        self.pool = Pool(processes=self.concurrency, initializer=self.init_worker)
 
     def cleanup_task_results(self):
         time_wait = 0
-        time_step = 2
+        time_step = 1
         while self.running:
             if time_wait >= self.task_result_expires.total_seconds():
                 stats = self.task_result_backend.cleanup(self.task_result_expires)
@@ -79,9 +73,11 @@ class Worker(object):
             time_wait += time_step
 
     def post_run(self):
-        # Add cleanup results task
-        t = threading.Thread(target=self.cleanup_task_results)
-        t.start()
+        self.cleanup_thread = Thread(target=self.cleanup_task_results)
+        self.cleanup_thread.start()
+
+    def init_worker(self):
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     def run(self):
         """
@@ -97,7 +93,7 @@ class Worker(object):
         self.running = True
         self.post_run()
 
-        while True:
+        while self.running:
             msg = self.socket.recv_pyobj()
 
             action = msg.get('action')
@@ -115,7 +111,7 @@ class Worker(object):
                         task.kwargs = msg.get('kwargs', {})
 
                     self.task_result_backend.add_task(task)
-                    self.queue.put(task.id)
+                    self.pool.apply_async(unwrap_run_task(self, task.id))
                     self.socket.send_pyobj({'success': True, 'task': task})
             elif action == 'get_result':
                 task_id = msg.get('id')
@@ -163,39 +159,41 @@ class Worker(object):
         """
         del(self.tasks[task_name])
 
-    def _worker(self):
-        while True:
-            task_id = self.queue.get()
-            task = self.task_result_backend.get_task(task_id)
+    def run_task(self, task_id):
+        task = self.task_result_backend.get_task(task_id)
 
-            with self.lock:
-                logger.info('Running %s (args:%s) (kwargs:%s)' % (
-                    task.name, task.args, task.kwargs))
+        logger.info('Running %s (args:%s) (kwargs:%s)' % (
+            task.name, task.args, task.kwargs))
 
-            task_func = self.tasks.get(task.name, None)
+        task_func = self.tasks.get(task.name, None)
 
-            try:
-                task.set_result(task_func(*task.args, **task.kwargs))
-                task.set_success(True)
-            except Exception as err:
-                task.set_success(False)
-                task.set_exception("%s" % err)
+        try:
+            task.set_result(task_func(*task.args, **task.kwargs))
+            task.set_success(True)
+        except Exception as err:
+            task.set_success(False)
+            task.set_exception("%s" % err)
 
-            task.set_terminated(True)
-            task.set_terminated_at(datetime.now())
-            self.task_result_backend.update_task(task)
-            logger.info('Finished task %s (success: %s)' % (
-                task_id, task.success))
-            logger.info(task.exception)
-            self.queue.task_done()
+        task.set_terminated(True)
+        task.set_terminated_at(datetime.now())
+        self.task_result_backend.update_task(task)
+        logger.info('Finished task %s (success: %s)' % (
+            task_id, task.success))
+        logger.info(task.exception)
 
     def stop(self):
         """
         Stop server and all its threads.
         """
-        self.running = False
-        logger.info('Waiting tasks to finish...')
-        self.queue.join()
-        self.socket.close()
-        logger.info('Exiting...')
-        sys.exit(0)
+        try:
+            self.running = False
+            logger.info('Waiting tasks to finish...')
+
+            self.cleanup_thread.join(timeout=0)
+
+            self.pool.close()
+            self.pool.join()
+            self.socket.close()
+            logger.info('Exiting (C-Ctrl again to force it)...')
+        except KeyboardInterrupt:
+            self.pool.terminate()
