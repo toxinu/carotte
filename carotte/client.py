@@ -10,7 +10,7 @@ class Client(object):
     """
     :class:`carotte.Client` can send task and manage it.
 
-    :param list workers: List of worker addresses
+    :param list worker: Worker address
     :param int timeout: Socket timeout
     :param boolean reconnect: Auto reconnect socket
 
@@ -25,8 +25,8 @@ class Client(object):
     >>> task.result
     >>> 'hello world'
     """
-    def __init__(self, workers=["tcp://localhost:5550"], timeout=10, reconnect=True):
-        self.workers = workers
+    def __init__(self, worker="tcp://localhost:5550", timeout=10, reconnect=True):
+        self.worker = worker
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
         self.socket.setsockopt(zmq.LINGER, 0)
@@ -36,14 +36,12 @@ class Client(object):
         self.timeout = timeout
         self.reconnect = reconnect
 
-        for address in self.workers:
-            logger.info('Connecting to %s ...' % address)
-            self.socket.connect(address)
+        logger.info('Connecting to %s ...' % self.worker)
+        self.socket.connect(self.worker)
 
     def __connect_socket(self):
-        for address in self.workers:
-            logger.info('Reconnecting to %s ...' % address)
-            self.socket.connect(address)
+        logger.info('Reconnecting to %s ...' % self.worker)
+        self.socket.connect(self.worker)
 
     def __send_pyobj(self, data):
         try:
