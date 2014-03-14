@@ -24,4 +24,7 @@ if __name__ == '__main__':
             from carotte import registrar
             for name, task in registrar.items():
                 worker.add_task(name, task)
-        worker.run()
+        try:
+            worker.run()
+        except KeyboardInterrupt:
+            worker.stop()
