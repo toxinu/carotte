@@ -34,7 +34,7 @@ setup(
     author_email="hello@socketubs.org",
     url='https://github.com/socketubs/carotte',
     keywords="python zmq pyzmq celery task async",
-    packages=['carotte'],
+    packages=['carotte', 'carotte.results', 'carotte.results.backends'],
     scripts=['scripts/carotte'],
     install_requires=['pyzmq', 'docopt'],
     classifiers=[
