@@ -7,10 +7,10 @@ from carotte import Worker
 __doc__ = """Carotte.
 
 Usage:
-    carotte worker [--thread=<int>] [--bind=<address>] [--tasks-module=<module>]
+    carotte worker [--concurrency=<int>] [--bind=<address>] [--tasks-module=<module>]
 
 Options:
-    --thread=<int>              Number of threads to run [default: 5]
+    --concurrency=<int>         Number of processes to run [default: 5]
     --bind=<address>            Address to bind worker on [default: tcp://127.0.0.1:5550]
     --tasks-module=<module>     Module to load tasks from
 """
@@ -18,7 +18,8 @@ Options:
 if __name__ == '__main__':
     args = docopt(__doc__, version=__version__)
     if args.get('worker'):
-        worker = Worker(bind=args.get('--bind'), thread=args.get('--thread'))
+        worker = Worker(
+            bind=args.get('--bind'), concurrency=int(args.get('--concurrency')))
         if args.get('--tasks-module'):
             __import__(args.get('--tasks-module'))
             from carotte import registrar
