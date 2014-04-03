@@ -24,7 +24,7 @@ Create your ``tasks.py``: ::
 
 Run your worker (default on "tcp://127.0.0.1:5550"): ::
 
-    carotte --tasks-module tasks
+    carotte worker --tasks-module tasks
 
 Run your client: ::
 
