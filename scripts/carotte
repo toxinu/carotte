@@ -3,6 +3,7 @@
 from docopt import docopt
 from carotte import __version__
 from carotte import Worker
+from importlib import import_module
 
 __doc__ = """Carotte.
 
@@ -21,7 +22,7 @@ if __name__ == '__main__':
         worker = Worker(
             bind=args.get('--bind'), concurrency=int(args.get('--concurrency')))
         if args.get('--tasks-module'):
-            __import__(args.get('--tasks-module'))
+            import_module(args.get('--tasks-module'))
             from carotte import registrar
             for name, task in registrar.items():
                 worker.add_task(name, task)
