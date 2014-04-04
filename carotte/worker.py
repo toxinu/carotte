@@ -72,7 +72,7 @@ class Worker(object):
             sleep(time_step)
             time_wait += time_step
 
-    def post_run(self):
+    def pre_run(self):
         self.cleanup_thread = Thread(target=self.cleanup_task_results)
         self.cleanup_thread.start()
 
@@ -91,7 +91,7 @@ class Worker(object):
         self.socket.bind(self.bind)
 
         self.running = True
-        self.post_run()
+        self.pre_run()
 
         while self.running:
             msg = self.socket.recv_pyobj()
