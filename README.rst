@@ -45,7 +45,7 @@ But you can really set up scheduled tasks with schedule_.
 Your ``tasks.py``: ::
 
     import requests
-    from carote import task
+    from carotte import task
 
     @task
     def get(url):
