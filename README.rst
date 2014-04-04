@@ -39,13 +39,13 @@ Run your client: ::
 Scheduled tasks
 ---------------
 
-Carotte is not a scheduler, its a asynchronous tasks runner.
+Carotte is not a scheduler, its an asynchronous tasks runner.
 But you can really set up scheduled tasks with schedule_.
 
 Your ``tasks.py``: ::
 
     import requests
-    from carote import task
+    from carotte import task
 
     @task
     def get(url):
