@@ -60,7 +60,7 @@ class Client(object):
                 raise exception
             return r.get('task')
         else:
-            raise IOError('Socket timeout (%s)' % self.workers)
+            raise IOError('Socket timeout (%s)' % self.worker)
 
     def run_task(self, task_name, task_args=[], task_kwargs={}):
         """
