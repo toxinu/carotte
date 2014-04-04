@@ -35,3 +35,43 @@ Run your client: ::
     >>> True
     >>> task.result
     >>> 'Hello foo!'
+
+Scheduled tasks
+---------------
+
+Carotte is not a scheduler, its a asynchronous tasks runner.
+But you can really set up scheduled tasks with schedule_.
+
+Your ``tasks.py``: ::
+
+    import requests
+    from carote import task
+
+    @task
+    def get(url):
+        r = requests.get(url)
+        if r.status_code != 200:
+            # Do stuff
+            return False
+        return True
+
+Your ``scheduler.py``: ::
+    
+    import time
+    import schedule
+    from carotte import client
+
+    client = Client()
+    schedule.every(10).seconds.do(client.run_task, 'get', ['http://google.com'])
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+Run your worker and your scheduler: ::
+
+    carotte worker --tasks-module tasks
+    # In another terminal
+    python scheduler.py
+
+.. _schedule: https://github.com/dbader/schedule
