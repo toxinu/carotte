@@ -111,7 +111,7 @@ class Worker(object):
                         task.kwargs = msg.get('kwargs', {})
 
                     self.task_result_backend.add_task(task)
-                    self.pool.apply_async(unwrap_run_task(self, task.id))
+                    self.pool.apply_async(unwrap_run_task, [self, task.id])
                     self.socket.send_pyobj({'success': True, 'task': task})
             elif action == 'get_result':
                 task_id = msg.get('id')
