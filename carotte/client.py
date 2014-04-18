@@ -52,8 +52,8 @@ class Client(object):
             else:
                 raise
 
-    def __recv_pyobj(self):
-        if self.poller.poll(self.timeout * 1000):
+    def __recv_pyobj(self, notimeout=False):
+        if notimeout or self.poller.poll(self.timeout * 1000):
             r = self.socket.recv_pyobj()
             if not r.get('success', False):
                 exception = r.get('exception', Exception('Unhandler exception'))
@@ -117,5 +117,5 @@ class Client(object):
             'id': task_id
         }
         self.__send_pyobj(data)
-        task = self.__recv_pyobj()
+        task = self.__recv_pyobj(notimeout=True)
         return task
