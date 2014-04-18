@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
+import sys
 import zmq
 import uuid
 import time
-import signal
+import threading
 from time import sleep
 from threading import Thread
 from datetime import datetime
 from datetime import timedelta
-from multiprocessing import Pool
+
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 from . import Task
 from . import logger
@@ -18,10 +23,6 @@ from .exceptions import TaskNotFound
 from .exceptions import MessageMalformed
 
 __all__ = ['Worker']
-
-
-def unwrap_run_task(*args, **kwargs):
-    return Worker.run_task(*args, **kwargs)
 
 
 class Worker(object):
@@ -58,8 +59,13 @@ class Worker(object):
         assert isinstance(task_result_expires, timedelta)
         self.task_result_expires = task_result_expires
 
+        self.lock = threading.Lock()
+        self.queue = queue.Queue()
         logger.info('Running %s concurrency...' % self.concurrency)
-        self.pool = Pool(processes=self.concurrency, initializer=self.init_worker)
+        for i in range(int(self.concurrency)):
+                t = threading.Thread(target=self._worker)
+                t.daemon = True
+                t.start()
 
     def cleanup_task_results(self):
         time_wait = 0
@@ -75,9 +81,6 @@ class Worker(object):
     def pre_run(self):
         self.cleanup_thread = Thread(target=self.cleanup_task_results)
         self.cleanup_thread.start()
-
-    def init_worker(self):
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     def run(self):
         """
@@ -111,7 +114,8 @@ class Worker(object):
                         task.kwargs = msg.get('kwargs', {})
 
                     self.task_result_backend.add_task(task)
-                    self.pool.apply_async(unwrap_run_task, [self, task.id])
+
+                    self.queue.put(task.id)
                     self.socket.send_pyobj({'success': True, 'task': task})
             elif action == 'get_result':
                 task_id = msg.get('id')
@@ -159,26 +163,36 @@ class Worker(object):
         """
         del(self.tasks[task_name])
 
-    def run_task(self, task_id):
-        task = self.task_result_backend.get_task(task_id)
+    def _worker(self):
+        while True:
+            task_id = self.queue.get()
+            task = self.task_result_backend.get_task(task_id)
 
-        logger.info('Running %s (args:%s) (kwargs:%s)' % (
-            task.name, task.args, task.kwargs))
+            with self.lock:
+                logger.info('Running %s (args:%s) (kwargs:%s)' % (
+                    task.name, task.args, task.kwargs))
 
-        task_func = self.tasks.get(task.name, None)
+            task_func = self.tasks.get(task.name, None)
 
-        try:
-            task.set_result(task_func(*task.args, **task.kwargs))
-            task.set_success(True)
-        except Exception as err:
-            task.set_success(False)
-            task.set_exception("%s" % err)
+            try:
+                task.set_result(task_func(*task.args, **task.kwargs))
+                task.set_success(True)
+            except Exception as err:
+                task.set_success(False)
+                task.set_exception("%s" % err)
 
-        task.set_terminated(True)
-        task.set_terminated_at(datetime.now())
+            task.set_terminated(True)
+            task.set_terminated_at(datetime.now())
+            self.task_result_backend.update_task(task)
+            logger.info('Finished task %s (success: %s)' % (
+                task_id, task.success))
+            logger.info(task.exception)
+            self.queue.task_done()
+
+    def post_run_task(self, task):
         self.task_result_backend.update_task(task)
         logger.info('Finished task %s (success: %s)' % (
-            task_id, task.success))
+            task.id, task.success))
         logger.info(task.exception)
 
     def stop(self):
@@ -188,12 +202,9 @@ class Worker(object):
         try:
             self.running = False
             logger.info('Waiting tasks to finish...')
-
-            self.cleanup_thread.join(timeout=0)
-
-            self.pool.close()
-            self.pool.join()
+            self.queue.join()
             self.socket.close()
             logger.info('Exiting (C-Ctrl again to force it)...')
         except KeyboardInterrupt:
-            self.pool.terminate()
+            logger.info('Forced.')
+            sys.exit(1)
