@@ -4,32 +4,30 @@ import os
 import sys
 from docopt import docopt
 from carotte import __version__
-from carotte import Worker
 from importlib import import_module
 
 __doc__ = """Carotte.
 
 Usage:
-    carotte worker [--concurrency=<int>] [--bind=<address>] [--tasks-module=<module>]
+    carotte worker [--concurrency=<int>] [--bind=<address>] [--app=<module>]
 
 Options:
     --concurrency=<int>         Number of processes to run [default: 5]
     --bind=<address>            Address to bind worker on [default: tcp://127.0.0.1:5550]
-    --tasks-module=<module>     Module to load tasks from
+    -A, --app=<module>              App module to load [default: app:app]
 """
 
 if __name__ == '__main__':
     args = docopt(__doc__, version=__version__)
     if args.get('worker'):
-        worker = Worker(
-            bind=args.get('--bind'), concurrency=int(args.get('--concurrency')))
-        if args.get('--tasks-module'):
-            sys.path.append(os.getcwd())
-            import_module(args.get('--tasks-module'))
-            from carotte import registrar
-            for name, task in registrar.items():
-                worker.add_task(name, task)
+        sys.path.append(os.getcwd())
+        module_name = args.get('--app').split(':')[0]
+        app_name = args.get('--app').split(':')[-1]
+        module = import_module(module_name)
+        app = getattr(module, app_name)
         try:
-            worker.run()
+            app.run_worker(
+                bind=args.get('--bind'),
+                concurrency=int(args.get('--concurrency')))
         except KeyboardInterrupt:
-            worker.stop()
+            app.worker.stop()
