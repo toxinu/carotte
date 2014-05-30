@@ -102,6 +102,8 @@ class Worker(object):
             action = msg.get('action')
             if action == 'run_task':
                 if msg.get('name') not in self.tasks:
+                    print(msg.get('name'))
+                    print(self.tasks)
                     response = {
                         'success': False, 'exception': TaskNotFound(msg.get('name'))}
                     self.socket.send_pyobj(response)

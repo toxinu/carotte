@@ -2,17 +2,15 @@
 from functools import wraps
 from functools import partial
 
-from carotte import registrar
 
-
-def task(method=None, name=None):
+def task(method=None, name=None, app=None):
     if method is None:
-        return partial(task, name=name)
+        return partial(task, app=app, name=name)
+    if not name:
+        name = method.__name__
 
-    if name:
-        registrar[name] = method
-    else:
-        registrar[method.__name__] = method
+    method.delay = lambda *args, **kwargs: app.run_task(name, *args, **kwargs)
+    app.registrar[name] = method
 
     @wraps(method)
     def f(*args, **kwargs):
