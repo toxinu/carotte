@@ -51,7 +51,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'Carotte'
-copyright = '2014, Geoffrey LEHEE'
+copyright = '2014, toxinu'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -204,7 +204,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   ('index', 'Carotte.tex', 'Carotte Documentation',
-   'Geoffrey LEHEE', 'manual'),
+   'toxinu', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -234,7 +234,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'carotte', 'Carotte Documentation',
-     ['Geoffrey LEHEE'], 1)
+     ['toxinu'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -248,7 +248,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'Carotte', 'Carotte Documentation',
-   'Geoffrey LEHEE', 'Carotte', 'One line description of project.',
+   'toxinu', 'Carotte', 'One line description of project.',
    'Miscellaneous'),
 ]
 
